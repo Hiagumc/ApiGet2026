@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Escolar - Gestão Escolar</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-graduation-cap"></i><span>ERP Escolar</span></div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-view="dashboard"><i class="fas fa-chart-pie"></i><span>Dashboard</span></button>
+                <button class="nav-item" data-view="escolas"><i class="fas fa-school"></i><span>Escolas</span></button>
+                <button class="nav-item" data-view="alunos"><i class="fas fa-user-graduate"></i><span>Alunos</span></button>
+                <button class="nav-item" data-view="professores"><i class="fas fa-chalkboard-teacher"></i><span>Professores</span></button>
+            </nav>
+            <div class="sidebar-footer"><small>v1.0.0 &copy; 2026</small></div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <div>
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p id="pageSubtitle" class="text-secondary">Visão geral do sistema</p>
+                </div>
+                <div class="header-actions">
+                    <button id="btnRefresh" class="btn-secondary" title="Atualizar dados"><i class="fas fa-sync-alt"></i></button>
+                    <button id="btnAdd" class="btn-primary"><i class="fas fa-plus"></i> Adicionar</button>
+                </div>
+            </header>
+
+            <!-- Dashboard -->
+            <section class="view" id="view-dashboard">
+                <div class="stats">
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-school"></i></div><div><strong id="cnt-escolas">0</strong><span>Escolas</span></div></div>
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-user-graduate"></i></div><div><strong id="cnt-alunos">0</strong><span>Alunos</span></div></div>
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-chalkboard-teacher"></i></div><div><strong id="cnt-professores">0</strong><span>Professores</span></div></div>
+                </div>
+                <div class="panel">
+                    <h2>Alunos recentes</h2>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>Nome</th><th>Série</th><th>Escola</th></tr></thead>
+                        <tbody id="tbody-recentes"></tbody>
+                    </table></div>
+                </div>
+            </section>
+
+            <!-- Escolas -->
+            <section class="view" id="view-escolas" hidden>
+                <div class="toolbar"><input type="search" class="search" data-search="escolas" placeholder="Buscar escola..."></div>
+                <div class="panel"><div class="table-wrap"><table>
+                    <thead><tr><th>Nome</th><th>Cidade</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody id="tbody-escolas"></tbody>
+                </table></div></div>
+            </section>
+
+            <!-- Alunos -->
+            <section class="view" id="view-alunos" hidden>
+                <div class="toolbar"><input type="search" class="search" data-search="alunos" placeholder="Buscar aluno..."></div>
+                <div class="panel"><div class="table-wrap"><table>
+                    <thead><tr><th>Nome</th><th>Série</th><th>Escola</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody id="tbody-alunos"></tbody>
+                </table></div></div>
+            </section>
+
+            <!-- Professores -->
+            <section class="view" id="view-professores" hidden>
+                <div class="toolbar"><input type="search" class="search" data-search="professores" placeholder="Buscar professor..."></div>
+                <div class="panel"><div class="table-wrap"><table>
+                    <thead><tr><th>Nome</th><th>Disciplina</th><th>Escola</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody id="tbody-professores"></tbody>
+                </table></div></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de cadastro/edição -->
+    <dialog id="modal">
+        <form id="form" method="dialog">
+            <h2 id="modalTitle"></h2>
+            <div id="fields"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="btnCancel">Cancelar</button>
+                <button type="submit" class="btn-primary">Salvar</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <script>
+        const API = "/api"; // ajuste para a URL da sua API (ex.: https://localhost:7000/api)
+
+        // Cada entidade: endpoint do controller, colunas/campos e dados de exemplo (usados se a API estiver fora do ar)
+        const ent = {
+            escolas: { ep: "Escola", nome: "escola", cols: [["nome", "Nome"], ["cidade", "Cidade"]],
+                data: [{ id: 1, nome: "Escola Jean Piaget", cidade: "Curitiba" }, { id: 2, nome: "Colégio Vygotsky", cidade: "Recife" }] },
+            alunos: { ep: "Aluno", nome: "aluno", cols: [["nome", "Nome"], ["serie", "Série"], ["escola", "Escola"]],
+                data: [{ id: 1, nome: "Ana Souza", serie: "7º ano", escola: "Escola Jean Piaget" }, { id: 2, nome: "Bruno Lima", serie: "9º ano", escola: "Colégio Vygotsky" }] },
+            professores: { ep: "Professor", nome: "professor", cols: [["nome", "Nome"], ["disciplina", "Disciplina"], ["escola", "Escola"]],
+                data: [{ id: 1, nome: "Marta Oliveira", disciplina: "Matemática", escola: "Escola Jean Piaget" }, { id: 2, nome: "Paulo Ribeiro", disciplina: "História", escola: "Colégio Vygotsky" }] }
+        };
+        const titles = {
+            dashboard: ["📊 Dashboard", "Visão geral do sistema"],
+            escolas: ["🏫 Escolas", "Gerencie as escolas cadastradas"],
+            alunos: ["🎓 Alunos", "Consulte e cadastre alunos"],
+            professores: ["👩‍🏫 Professores", "Equipe de professores"]
+        };
+
+        const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        let current = "dashboard", editing = null, toastTimer;
+
+        function toast(msg) {
+            const t = $("#toast"); t.textContent = msg; t.hidden = false;
+            clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3500);
+        }
+
+        async function api(method, path, body) {
+            const r = await fetch(`${API}/${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+            if (!r.ok) throw new Error(r.status);
+            return r.status === 204 ? null : r.json();
+        }
+
+        async function load(k) {
+            try { ent[k].data = await api("GET", ent[k].ep); ent[k].live = true; }
+            catch { ent[k].live = false; }
+        }
+
+        async function save(k, obj, id) {
+            const e = ent[k];
+            try {
+                id ? await api("PUT", `${e.ep}/${id}`, { ...obj, id }) : await api("POST", e.ep, obj);
+                await load(k); toast("Salvo com sucesso");
+            } catch {
+                if (id) e.data = e.data.map(x => x.id == id ? { ...x, ...obj } : x);
+                else e.data.push({ ...obj, id: Date.now() });
+                toast("Salvo localmente: API indisponível");
+            }
+        }
+
+        async function remove(k, id) {
+            const e = ent[k];
+            try { await api("DELETE", `${e.ep}/${id}`); await load(k); toast("Excluído com sucesso"); }
+            catch { e.data = e.data.filter(x => x.id != id); toast("Excluído localmente: API indisponível"); }
+        }
+
+        function renderList(k) {
+            const e = ent[k], q = ($(`[data-search="${k}"]`).value || "").toLowerCase();
+            const list = e.data.filter(r => e.cols.some(c => String(r[c[0]] ?? "").toLowerCase().includes(q)));
+            $(`#tbody-${k}`).innerHTML = list.length
+                ? list.map(r => `<tr>${e.cols.map(c => `<td>${esc(r[c[0]] ?? "")}</td>`).join("")}
+                    <td class="col-actions">
+                        <button class="icon-btn" data-edit="${r.id}" title="Editar"><i class="fas fa-pen"></i></button>
+                        <button class="icon-btn danger" data-del="${r.id}" title="Excluir"><i class="fas fa-trash"></i></button>
+                    </td></tr>`).join("")
+                : `<tr><td colspan="${e.cols.length + 1}" class="empty">Nenhum registro encontrado.</td></tr>`;
+        }
+
+        function renderDashboard() {
+            for (const k in ent) $(`#cnt-${k}`).textContent = ent[k].data.length;
+            const recentes = ent.alunos.data.slice(-5).reverse();
+            $("#tbody-recentes").innerHTML = recentes.length
+                ? recentes.map(r => `<tr><td>${esc(r.nome)}</td><td>${esc(r.serie ?? "")}</td><td>${esc(r.escola ?? "")}</td></tr>`).join("")
+                : `<tr><td colspan="3" class="empty">Nenhum aluno cadastrado.</td></tr>`;
+        }
+
+        const render = () => current === "dashboard" ? renderDashboard() : renderList(current);
+
+        function show(name) {
+            current = name;
+            $("#pageTitle").textContent = titles[name][0];
+            $("#pageSubtitle").textContent = titles[name][1];
+            $$(".view").forEach(v => v.hidden = v.id !== `view-${name}`);
+            $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+            $("#btnAdd").hidden = name === "dashboard";
+            render();
+        }
+
+        function openForm(item) {
+            const e = ent[current]; editing = item ? item.id : null;
+            $("#modalTitle").textContent = (item ? "Editar " : "Nova ") .replace("Nova", e.nome.endsWith("a") ? "Nova" : "Novo") + e.nome;
+            $("#fields").innerHTML = e.cols.map(c => `<label>${c[1]}<input name="${c[0]}" value="${esc(item?.[c[0]] ?? "")}" required></label>`).join("");
+            $("#modal").showModal();
+        }
+
+        // Eventos
+        $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
+        $$(".search").forEach(i => i.addEventListener("input", render));
+        $("#btnAdd").addEventListener("click", () => openForm());
+        $("#btnCancel").addEventListener("click", () => $("#modal").close());
+        $("#btnRefresh").addEventListener("click", async () => { await Promise.all(Object.keys(ent).map(load)); render(); toast("Dados atualizados"); });
+        $("#form").addEventListener("submit", async ev => {
+            ev.preventDefault();
+            await save(current, Object.fromEntries(new FormData(ev.target)), editing);
+            $("#modal").close(); render();
+        });
+        $(".main-content").addEventListener("click", async ev => {
+            const b = ev.target.closest("[data-edit],[data-del]"); if (!b) return;
+            if (b.dataset.edit) openForm(ent[current].data.find(x => x.id == b.dataset.edit));
+            else if (confirm("Excluir este registro?")) { await remove(current, b.dataset.del); render(); }
+        });
+
+        // Início
+        show("dashboard");
+        Promise.all(Object.keys(ent).map(load)).then(() => {
+            render();
+            if (!Object.values(ent).some(e => e.live)) toast("API não encontrada: exibindo dados de exemplo");
+        });
+    </script>
+</body>
+</html>
